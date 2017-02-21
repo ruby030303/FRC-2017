@@ -1,0 +1,308 @@
+#include <iostream>
+#include <memory>
+#include <string>
+
+#include <IterativeRobot.h>
+#include <LiveWindow/LiveWindow.h>
+#include <SmartDashboard/SendableChooser.h>
+#include <SmartDashboard/SmartDashboard.h>
+#include <TalonSRX.h>
+#include <VictorSP.h>
+#include <XboxController.h>
+#include <DoubleSolenoid.h>
+#include <Encoder.h>
+#include <Timer.h>
+#include <cmath>
+#include <Solenoid.h>
+class Robot: public frc::IterativeRobot {
+public:
+
+	XboxController controllerOne{1};
+
+	//drive variables
+	TalonSRX frontRight{0};
+	TalonSRX frontLeft{1};
+	VictorSP backLeft{2};
+	VictorSP backRight{3};
+	double driveY;
+	double driveX;
+	double driveRotate;
+	/*
+
+	VictorSP shooter{5};
+	VictorSP blender{6};
+	VictorSP climber{7};
+
+	*/
+
+    double mackyButton;
+	DoubleSolenoid dropDowns;
+	double down;
+
+	//encoder variables
+	static constexpr double waitForUpdate = 0.005;
+	Encoder encoder{1,2};
+
+	//intake variables
+	VictorSP intake{4};
+	double intakeButton;
+	double intakeOn;
+	bool isRunning;
+	double speed;
+	bool intakeCurrent;
+    bool intakeOff;
+    double reverseButton;
+    double intakeReverse;
+    DoubleSolenoid intakeSolenoid;
+    bool intakeOut;
+    double intakeOutButton;
+
+    //extra
+	double expoCurve;
+	double deadZoneArea;
+
+	void RobotInit() {
+		chooser.AddDefault(autoNameDefault, autoNameDefault);
+		chooser.AddObject(autoNameCustom, autoNameCustom);
+		frc::SmartDashboard::PutData("Auto Modes", &chooser);
+
+		//drive train
+		driveY = 0.0;
+		driveX =0.0;
+		driveRotate = 0.0;
+		down = false;
+
+
+		//intake
+        intakeOn = 1.0;
+        intakeOff = 0.0;
+        intakeReverse = -1.0;
+        isRunning = false;
+        speed = 0.0;
+        //extra
+        expoCurve = 1.0;
+        deadZoneArea = 0.2;
+	}
+
+	/*
+	 * This autonomous (along with the chooser code above) shows how to select
+	 * between different autonomous modes using the dashboard. The sendable
+	 * chooser code works with the Java SmartDashboard. If you prefer the
+	 * LabVIEW Dashboard, remove all of the chooser code and uncomment the
+	 * GetString line to get the auto name from the text box below the Gyro.
+	 *
+	 * You can add additional auto modes by adding additional comparisons to the
+	 * if-else structure below with additional strings. If using the
+	 * SendableChooser make sure to add them to the chooser code above as well.
+	 */
+	void AutonomousInit() override {
+		autoSelected = chooser.GetSelected();
+		// std::string autoSelected = SmartDashboard::GetString("Auto Selector", autoNameDefault);
+		std::cout << "Auto selected: " << autoSelected << std::endl;
+
+		if (autoSelected == autoNameCustom) {
+			// Custom Auto goes here
+		} else {
+			// Default Auto goes here
+		}
+	}
+
+	void AutonomousPeriodic() {
+		if (autoSelected == autoNameCustom) {
+			// Custom Auto goes here
+		} else {
+			// Default Auto goes here
+		}
+	}
+
+	void TeleopInit() {
+     while(IsOperatorControl && IsEnabled){
+
+       drive();
+       RobotInit();
+       deadZone();
+
+
+     }
+
+	}
+
+   	void TeleopPeriodic() {
+
+   	}
+
+	void TestPeriodic() {
+		lw->Run();
+	}
+
+
+
+private:
+	frc::LiveWindow* lw = LiveWindow::GetInstance();
+	frc::SendableChooser<std::string> chooser;
+	const std::string autoNameDefault = "Default";
+	const std::string autoNameCustom = "My Auto";
+	std::string autoSelected;
+
+	double expo(double x, double a){
+
+		        double y = x;
+		        y = a * pow(y, 3) + (1-a)*y;
+		        return y;
+
+		    }
+
+	void deadZone(){
+
+
+
+	        double x = abs(controllerOne.GetRawAxis(0));
+	        double y = abs(controllerOne.GetRawAxis(1));
+
+	        if (sqrt((x*x)+(y*y)) > deadZoneArea){
+
+	            arcadeDrive(controllerOne.GetRawAxis(0),controllerOne.GetRawAxis(1));
+	            mackyDrive(controllerOne.GetRawAxis(4), controllerOne.GetRawAxis(0), controllerOne.GetRawAxis(1));
+	        }
+	        else {
+	            frontRight.Set(0.0);
+	            frontLeft.Set(0.0);
+	            backRight.Set(0.0);
+	            backLeft.Set(0.0);
+	        }
+	    }
+	void encoderStuffs(){
+
+			encoder.SetSamplesToAverage(5);
+			encoder.SetDistancePerPulse(1.0/360.0 * 2.0 * 3.1415 * 2.0);
+			encoder.SetMinRate(1.0);
+
+		}
+
+		void encoderFeedBack(){
+			while(IsOporatorActive) && (IsEnabled){
+				SmartDashboard::PutNumber("Encoder Distance",
+									encoder.GetDistance());
+				SmartDashboard::PutNumber("Encoder Rate",encoder.GetRate());
+
+				Wait(waitForUpdate);
+
+
+			}
+
+		}
+
+
+
+		void arcadeDrive(double driveY,double driveX){
+
+			frontRight.Set(constrain(expo(driveY + driveX,expoCurve),-1,0));
+			frontLeft.Set(constrain(expo(driveY + driveX,expoCurve),-1,0));
+			backRight.Set(constrain(expo(driveY - driveX,expoCurve),-1,0));
+			backLeft.Set(constrain(expo(driveY - driveX,expoCurve),-1,0));
+
+
+		}
+
+		void mackyDrive(double driveRotate, double driveY, double driveX){
+
+			driveX      = controllerOne.GetRawAxis(0);
+			driveY      = controllerOne.GetRawAxis(1);
+			driveRotate = controllerOne.GetRawAxis(4);
+
+
+			frontRight.Set(constrain(expo(driveRotate + driveY + driveX,expoCurve), -1,1));
+			frontLeft.Set(constrain(expo(driveRotate - driveY + driveX,expoCurve), -1,1));
+	        backRight.Set(constrain(expo(driveRotate + driveY - driveX,expoCurve), -1,1));
+			backLeft.Set(constrain(expo(driveRotate - driveY  - driveX,expoCurve), -1,1));
+
+
+
+		}
+
+		double constrain(double original, double min, double max){
+
+			if(original > max){
+
+				original = max;
+
+			}
+
+			if(original < min){
+
+				original = min;
+			}
+
+			return original;
+		}
+
+		void drive(){
+
+			mackyButton = controllerOne.GetRawButton(4);
+
+			if(mackyButton && !down && !previousState){
+
+				dropDowns.Set(frc::DoubleSolenoid::kForward);
+				mackyDrive(driveRotate, driveX, driveY);
+				down = true;
+
+
+			}
+
+			else if(mackyButton && down){
+
+				dropDowns.Set(frc::DoubleSolenoid::kReverse);
+				arcadeDrive(driveX, driveX);
+				down = false;
+
+			}
+
+		}
+
+		void inTake(){
+
+			intakeButton = controllerOne.GetRawButton(4);
+			reverseButton = controllerOne.GetRawButton(2);
+	       if(intakeButton && !isRunning && !intakeCurrent){
+
+	    	   speed = intakeOn;
+	    	   isRunning = true;
+
+	       }
+
+	       else if(intakeButton && isRunning && !intakeCurrent){
+
+	    	   speed = intakeOff;
+	    	   isRunning = false;
+	       }
+
+	       if(reverseButton && intakeOut){
+
+	       	    	   speed = intakeReverse;
+	       	       }
+
+
+	       intakeCurrent = intakeButton;
+	       intake.Set(speed);
+
+
+
+		}
+
+		void inTakeOut(){
+
+			intakeOutButton = controllerOne.GetRawButton(0);
+
+			if(intakeOutButton && !intakeOut){
+
+				intakeSolenoid.Set(frc::DoubleSolenoid::kForward);
+			}
+
+
+
+
+
+		}
+};
+
+START_ROBOT_CLASS(Robot)
